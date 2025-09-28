@@ -1,15 +1,12 @@
-import './globals.css'; // ✅ 반드시 필요
-import { ReactNode } from 'react';
-
 export const metadata = {
-  title: '헌법 게임',
-  description: 'O/X 퀴즈로 헌법 공부하기',
+  title: '헌법게임',
+  description: '엑셀 업로드 기반 OX 헌법 학습 게임'
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body className="min-h-screen">{children}</body>
     </html>
   );
 }

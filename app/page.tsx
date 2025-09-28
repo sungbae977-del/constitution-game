@@ -1,20 +1,10 @@
-// app/page.tsx
 'use client';
 
 import { useState } from 'react';
 import * as XLSX from 'xlsx';
-import WrongList from './wrong-list/page';
-
-type OX = 'O' | 'X';
-
-interface Question {
-  question: string;
-  answer: OX;          // 'O' | 'X'
-  explanation: string;
-}
+import WrongListClient, { OX, Question } from './components/WrongListClient';
 
 export default function Home() {
-  // --- state ---
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
   const [showResult, setShowResult] = useState<boolean>(false);
@@ -22,14 +12,12 @@ export default function Home() {
   const [wrongAnswers, setWrongAnswers] = useState<Question[]>([]);
   const [showWrongList, setShowWrongList] = useState<boolean>(false);
 
-  // --- helpers ---
   const normalizeAnswer = (raw: unknown): OX => {
     const s = String(raw ?? '').trim().toLowerCase();
     if (s === 'x' || s === 'false' || s === '0') return 'X';
     return 'O';
   };
 
-  // 엑셀 업로드
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -41,7 +29,6 @@ export default function Home() {
 
       const wb = XLSX.read(data, { type: 'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      // 컬럼명이 (question/answer/explanation) 또는 (문제/정답/해설) 이어도 수용
       const raw = XLSX.utils.sheet_to_json<any>(ws, { defval: '' });
 
       const cleaned: Question[] = raw.map((r) => ({
@@ -61,10 +48,9 @@ export default function Home() {
     reader.readAsArrayBuffer(file);
   };
 
-  // 정답 처리
   const handleAnswer = (userAnswer: OX) => {
     const current = questions[currentQuestionIndex];
-    if (!current) return; // safety guard
+    if (!current) return;
 
     const correct = userAnswer === current.answer;
     setIsCorrect(correct);
@@ -78,7 +64,6 @@ export default function Home() {
       });
     }
 
-    // 다음 문제 이동(잠깐 결과/해설 보여주기)
     setTimeout(() => {
       setShowResult(false);
       setIsCorrect(null);
@@ -86,19 +71,15 @@ export default function Home() {
     }, 2000);
   };
 
-  // --- render branches ---
-
-  // 틀린 문제 목록(하위 페이지 컴포넌트 재사용)
   if (showWrongList) {
     return (
-      <WrongList
+      <WrongListClient
         wrongAnswers={wrongAnswers}
         onBack={() => setShowWrongList(false)}
       />
     );
   }
 
-  // 업로드 전 화면
   if (questions.length === 0) {
     return (
       <div className="min-h-screen bg-green-50 flex flex-col items-center justify-center text-gray-800 px-4">
@@ -109,18 +90,12 @@ export default function Home() {
         >
           틀린 문제 목록
         </button>
-        <input
-          type="file"
-          accept=".xlsx,.xls"
-          onChange={handleFileUpload}
-          className="mb-2"
-        />
+        <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} className="mb-2" />
         <p className="text-sm text-gray-600">엑셀 파일을 업로드해 주세요.</p>
       </div>
     );
   }
 
-  // 한 사이클 종료
   if (currentQuestionIndex >= questions.length) {
     const correctCount = questions.length - wrongAnswers.length;
     const rate = ((correctCount / questions.length) * 100).toFixed(1);
@@ -141,8 +116,7 @@ export default function Home() {
     );
   }
 
-  // 진행 화면
-  const current = questions[currentQuestionIndex]; // 여기서는 존재 보장됨(위에서 종료 분기)
+  const current = questions[currentQuestionIndex];
 
   return (
     <div className="min-h-screen bg-green-50 flex flex-col items-center justify-center px-4 text-gray-800">
