@@ -1,119 +1,84 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
-import { useDropzone } from "react-dropzone";
-import * as XLSX from "xlsx";
-import Link from "next/link";
+import { useState } from 'react';
+import Link from 'next/link';
 
 export default function Home() {
-  const [questions, setQuestions] = useState<any[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [showAnswer, setShowAnswer] = useState(false);
-  const [userAnswers, setUserAnswers] = useState<boolean[]>([]);
-  const [wrongCounts, setWrongCounts] = useState<{ [key: string]: number }>({});
+  const [index, setIndex] = useState(0);
+  const [wrongCounts, setWrongCounts] = useState<{ [key: number]: number }>({
+    0: 3,
+    1: 1,
+    2: 2,
+  });
 
-  const onDrop = (acceptedFiles: File[]) => {
-    const file = acceptedFiles[0];
-    const reader = new FileReader();
+  const wrongQuestionIds = Object.keys(wrongCounts)
+    .filter((key) => wrongCounts[parseInt(key)] > 0)
+    .map((key) => parseInt(key));
 
-    reader.onload = (e) => {
-      const data = new Uint8Array(e.target?.result as ArrayBuffer);
-      const workbook = XLSX.read(data, { type: "array" });
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet);
-      setQuestions(jsonData);
-      setCurrentIndex(0);
-      setShowAnswer(false);
-      setUserAnswers([]);
-      setWrongCounts({});
-    };
-
-    reader.readAsArrayBuffer(file);
-  };
-
-  const { getRootProps, getInputProps } = useDropzone({ onDrop });
-
-  const handleAnswer = (answer: boolean) => {
-    if (questions.length === 0) return;
-    const correctAnswer = questions[currentIndex]?.answer === "O";
-    const isCorrect = answer === correctAnswer;
-
-    if (!isCorrect) {
-      const questionText = questions[currentIndex]?.question;
-      setWrongCounts((prev) => ({
-        ...prev,
-        [questionText]: (prev[questionText] || 0) + 1,
-      }));
-    }
-
-    setUserAnswers((prev) => [...prev, isCorrect]);
-    setShowAnswer(true);
-  };
+  const currentId = wrongQuestionIds[index];
 
   const handleNext = () => {
-    setShowAnswer(false);
-    if (currentIndex < questions.length - 1) {
-      setCurrentIndex(currentIndex + 1);
+    if (index < wrongQuestionIds.length - 1) {
+      setIndex((prev) => prev + 1);
     } else {
-      alert("퀴즈가 완료되었습니다.");
+      alert('마지막 문제입니다.');
     }
   };
 
-  const currentQuestion = questions[currentIndex];
-  const isCorrect = userAnswers[currentIndex];
+  const handleAnswer = (isCorrect: boolean) => {
+    if (!isCorrect) {
+      alert('틀렸습니다.');
+    } else {
+      alert('정답입니다.');
+    }
+    handleNext();
+  };
 
   return (
-    <div className="p-4 max-w-2xl mx-auto">
-      <nav className="mb-4 flex gap-4">
-        <Link href="/">홈</Link>
-        <Link href="/review">틀린 문제 목록</Link>
+    <div className="min-h-screen bg-black text-white p-6">
+      {/* 상단 메뉴 */}
+      <nav className="mb-8 flex space-x-6 text-lg font-semibold">
+        <Link href="/" className="hover:underline">
+          홈
+        </Link>
+        <Link href="/wrong" className="hover:underline">
+          틀린 문제 목록
+        </Link>
       </nav>
 
-      {questions.length === 0 ? (
-        <div
-          {...getRootProps()}
-          className="border-2 border-dashed p-4 text-center cursor-pointer"
-        >
-          <input {...getInputProps()} />
-          <p>엑셀 파일을 여기에 드래그하거나 클릭하여 업로드하세요</p>
+      {/* 틀린 문제 보기 영역 */}
+      <div className="max-w-xl mx-auto bg-gray-900 p-6 rounded-lg shadow-lg">
+        <h1 className="text-2xl font-bold mb-4">틀린 문제 목록</h1>
+
+        <div className="mb-4">
+          <p className="mb-2 text-lg font-medium">문제 ID: {currentId}</p>
+          <p className="text-sm text-gray-400">틀린 횟수: {wrongCounts[currentId]}</p>
         </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="text-lg font-semibold">
-            {currentIndex + 1}. {currentQuestion?.question}
-          </div>
-          <div className="flex gap-4">
-            <button
-              onClick={() => handleAnswer(true)}
-              className="bg-blue-500 text-white px-4 py-2 rounded"
-            >
-              O
-            </button>
-            <button
-              onClick={() => handleAnswer(false)}
-              className="bg-red-500 text-white px-4 py-2 rounded"
-            >
-              X
-            </button>
-          </div>
-          {showAnswer && (
-            <div
-              className={`p-2 rounded text-white ${
-                isCorrect ? "bg-green-500" : "bg-red-500"
-              }`}
-            >
-              {isCorrect ? "정답입니다!" : `틀렸습니다. 정답은 ${currentQuestion?.answer}입니다.`}
-            </div>
-          )}
+
+        {/* O / X 버튼 */}
+        <div className="flex gap-4 mb-4">
           <button
-            onClick={handleNext}
-            className="bg-gray-500 text-white px-4 py-2 rounded"
+            onClick={() => handleAnswer(true)}
+            className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded"
           >
-            다음 문제
+            O
+          </button>
+          <button
+            onClick={() => handleAnswer(false)}
+            className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded"
+          >
+            X
           </button>
         </div>
-      )}
+
+        {/* 다음 문제 버튼 */}
+        <button
+          onClick={handleNext}
+          className="bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded"
+        >
+          다음 문제
+        </button>
+      </div>
     </div>
   );
 }

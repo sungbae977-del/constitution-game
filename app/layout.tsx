@@ -1,30 +1,15 @@
-// app/layout.tsx
-
-import "./globals.css";
-import { Inter } from "next/font/google";
-import Link from "next/link";
-
-const inter = Inter({ subsets: ["latin"] });
+import './globals.css'; // ✅ 반드시 필요
+import { ReactNode } from 'react';
 
 export const metadata = {
-  title: "헌법게임",
-  description: "헌법 OX 퀴즈",
+  title: '헌법 게임',
+  description: 'O/X 퀴즈로 헌법 공부하기',
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ko">
-      <body className={inter.className}>
-        <nav style={{ display: "flex", gap: "1rem", padding: "1rem" }}>
-          <Link href="/">홈</Link>
-          <Link href="/review">틀린 문제 목록</Link>
-        </nav>
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
