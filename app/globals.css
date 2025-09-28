@@ -1,5 +1,9 @@
-@import "tailwindcss";
+/* ✅ Tailwind CSS 기본 세팅 */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
+/* ✅ 기존 스타일 유지 */
 :root {
   --background: #ffffff;
   --foreground: #171717;
