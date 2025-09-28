@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useDropzone } from "react-dropzone";
 import * as XLSX from "xlsx";
 
@@ -12,6 +12,7 @@ export default function ConstitutionGame() {
   const [showExplanation, setShowExplanation] = useState(false);
   const [wrongQuestions, setWrongQuestions] = useState<any[]>([]);
   const [mode, setMode] = useState<"normal" | "review">("normal");
+  const [wrongCounts, setWrongCounts] = useState<{ [key: string]: number }>({});
 
   const shuffleArray = (arr: any[]) => {
     const array = [...arr];
@@ -37,6 +38,7 @@ export default function ConstitutionGame() {
       setShowExplanation(false);
       setWrongQuestions([]);
       setMode("normal");
+      setWrongCounts({});
     };
     reader.readAsArrayBuffer(acceptedFiles[0]);
   };
@@ -50,7 +52,12 @@ export default function ConstitutionGame() {
     setShowExplanation(true);
 
     if (choice !== correct && mode === "normal") {
+      const questionText = questions[current]["문제"];
       setWrongQuestions((prev) => [...prev, questions[current]]);
+      setWrongCounts((prev) => ({
+        ...prev,
+        [questionText]: (prev[questionText] || 0) + 1,
+      }));
     }
   };
 
@@ -168,6 +175,19 @@ export default function ConstitutionGame() {
         >
           현재는 틀린 문제 복습 모드입니다.
         </p>
+      )}
+
+      {Object.keys(wrongCounts).length > 0 && (
+        <div className="mt-8 w-full max-w-xl bg-white p-4 rounded-lg shadow">
+          <h2 className="text-lg font-bold mb-2 text-black">📊 틀린 문제 통계</h2>
+          <ul className="list-disc list-inside text-black text-sm">
+            {Object.entries(wrongCounts).map(([question, count]) => (
+              <li key={question}>
+                <strong>{question}</strong> — <span>{count}회 틀림</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </main>
   );
