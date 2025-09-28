@@ -43,7 +43,9 @@ export default function Home() {
       setShowWrongList(false);
       setIsCorrect(null);
       setShowResult(false);
-      try { localStorage.removeItem('wrongAnswers'); } catch {}
+      try {
+        localStorage.removeItem('wrongAnswers');
+      } catch {}
     };
     reader.readAsArrayBuffer(file);
   };
@@ -59,7 +61,9 @@ export default function Home() {
     if (!correct) {
       setWrongAnswers((prev) => {
         const next = [...prev, current];
-        try { localStorage.setItem('wrongAnswers', JSON.stringify(next)); } catch {}
+        try {
+          localStorage.setItem('wrongAnswers', JSON.stringify(next));
+        } catch {}
         return next;
       });
     }
@@ -90,7 +94,12 @@ export default function Home() {
         >
           틀린 문제 목록
         </button>
-        <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} className="mb-2" />
+        <input
+          type="file"
+          accept=".xlsx,.xls"
+          onChange={handleFileUpload}
+          className="mb-2"
+        />
         <p className="text-sm text-gray-600">엑셀 파일을 업로드해 주세요.</p>
       </div>
     );
