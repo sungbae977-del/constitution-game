@@ -2,41 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 사용자 정의 스타일은 여기에 */
+@layer base {
+  :root {
+    --background: #ffffff;
+    --foreground: #171717;
+  }
 
-:root {
---background: #f9fafb;
---foreground: #111827;
-}
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: #0a0a0a;
+      --foreground: #ededed;
+    }
+  }
 
-
-body {
-background-color: var(--background);
-color: var(--foreground);
-font-family: Arial, Helvetica, sans-serif;
-padding: 1rem;
-}
-
-
-button {
-@apply px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 transition;
-}
-
-
-input[type="file"] {
-@apply border border-gray-300 rounded px-2 py-1 cursor-pointer;
-}
-
-
-.card {
-@apply bg-white p-4 shadow rounded mb-4;
-}
-
-
-.correct {
-@apply text-correct font-bold;
-}
-
-
-.incorrect {
-@apply text-incorrect font-bold;
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: Arial, Helvetica, sans-serif;
+  }
 }
