@@ -116,8 +116,10 @@ export default function Page() {
         {questions.length > 0 && !isFinished && !showWrongList && (
           <>
             <div className="mb-6 text-lg text-text">
-              {questions[currentQuestionIndex].question}
+              {/* ✅ 문제 번호를 문제 앞에 붙여서 표시 */}
+              {currentQuestionIndex + 1}. {questions[currentQuestionIndex].question}
             </div>
+
             <div className="flex justify-center space-x-6 mb-6">
               <button
                 onClick={() => handleAnswer('O')}
@@ -192,7 +194,7 @@ export default function Page() {
               <ul className="space-y-3">
                 {wrongAnswers.map((q, idx) => (
                   <li key={idx} className="bg-explanation p-3 rounded-lg">
-                    <p className="font-semibold">{q.question}</p>
+                    <p className="font-semibold">{idx + 1}. {q.question}</p>
                     <p>정답: {q.answer}</p>
                     <p className="text-sm mt-1">{q.explanation}</p>
                   </li>
