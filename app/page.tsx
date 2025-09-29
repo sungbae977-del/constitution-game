@@ -13,9 +13,8 @@ export default function Home() {
   const [showWrongList, setShowWrongList] = useState<boolean>(false);
 
   const normalizeAnswer = (raw: unknown): OX => {
-    const s = String(raw ?? '').trim().toLowerCase();
-    if (s === 'x' || s === 'false' || s === '0') return 'X';
-    return 'O';
+    const s = String(raw ?? '').trim();
+    return s === 'X' ? 'X' : 'O';
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -67,12 +66,12 @@ export default function Home() {
         return next;
       });
     }
+  };
 
-    setTimeout(() => {
-      setShowResult(false);
-      setIsCorrect(null);
-      setCurrentQuestionIndex((prev) => prev + 1);
-    }, 2000);
+  const handleNextQuestion = () => {
+    setShowResult(false);
+    setIsCorrect(null);
+    setCurrentQuestionIndex((prev) => prev + 1);
   };
 
   if (showWrongList) {
@@ -86,21 +85,23 @@ export default function Home() {
 
   if (questions.length === 0) {
     return (
-      <div className="min-h-screen bg-green-50 flex flex-col items-center justify-center text-gray-800 px-4">
-        <h1 className="text-4xl font-bold mb-4">헌법 게임 🎮</h1>
-        <button
-          className="text-blue-600 underline mb-4"
-          onClick={() => setShowWrongList(true)}
-        >
-          틀린 문제 목록
-        </button>
-        <input
-          type="file"
-          accept=".xlsx,.xls"
-          onChange={handleFileUpload}
-          className="mb-2"
-        />
-        <p className="text-sm text-gray-600">엑셀 파일을 업로드해 주세요.</p>
+      <div className="min-h-screen flex items-center justify-center bg-background text-gray-800 px-4">
+        <div className="bg-card p-8 rounded-2xl shadow-lg w-full max-w-xl text-center">
+          <h1 className="text-4xl font-bold mb-6">헌법 게임 🎮</h1>
+          <button
+            className="text-blue-600 underline mb-4"
+            onClick={() => setShowWrongList(true)}
+          >
+            틀린 문제 목록
+          </button>
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleFileUpload}
+            className="mb-2"
+          />
+          <p className="text-sm text-gray-600">엑셀 파일을 업로드해 주세요.</p>
+        </div>
       </div>
     );
   }
@@ -110,17 +111,19 @@ export default function Home() {
     const rate = ((correctCount / questions.length) * 100).toFixed(1);
 
     return (
-      <div className="min-h-screen bg-green-50 flex flex-col items-center justify-center text-gray-800 px-4">
-        <h1 className="text-3xl font-bold mb-6">헌법 게임 완료 🎉</h1>
-        <p className="text-xl mb-4">
-          총 {questions.length}문제 중 {correctCount}문제 맞춤 ({rate}%)
-        </p>
-        <button
-          onClick={() => setShowWrongList(true)}
-          className="px-6 py-2 bg-blue-500 text-white rounded-lg shadow hover:bg-blue-600"
-        >
-          틀린 문제 목록 보기
-        </button>
+      <div className="min-h-screen flex items-center justify-center bg-background text-gray-800 px-4">
+        <div className="bg-card p-8 rounded-2xl shadow-lg w-full max-w-xl text-center">
+          <h1 className="text-3xl font-bold mb-6">헌법 게임 완료 🎉</h1>
+          <p className="text-xl mb-4">
+            총 {questions.length}문제 중 {correctCount}문제 맞춤 ({rate}%)
+          </p>
+          <button
+            onClick={() => setShowWrongList(true)}
+            className="px-6 py-2 bg-blue-500 text-white rounded-lg shadow hover:bg-blue-600"
+          >
+            틀린 문제 목록 보기
+          </button>
+        </div>
       </div>
     );
   }
@@ -128,13 +131,11 @@ export default function Home() {
   const current = questions[currentQuestionIndex];
 
   return (
-    <div className="min-h-screen bg-green-50 flex flex-col items-center justify-center px-4 text-gray-800">
-      <h1 className="text-4xl font-bold mb-8">헌법게임 🎮</h1>
-
-      <div className="bg-white p-6 rounded-2xl shadow-lg w-full max-w-2xl text-center">
-        <h2 className="text-lg font-semibold mb-6">
+    <div className="min-h-screen flex items-center justify-center bg-background text-gray-800 px-4">
+      <div className="bg-card p-6 rounded-2xl shadow-lg w-full max-w-2xl text-center">
+        <h1 className="text-2xl font-bold mb-6">
           Q{currentQuestionIndex + 1}. {current.question}
-        </h2>
+        </h1>
 
         <div className="flex justify-center gap-6">
           <button
@@ -154,15 +155,21 @@ export default function Home() {
         {showResult && (
           <div
             className={`mt-6 p-4 rounded-lg shadow ${
-              isCorrect ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+              isCorrect ? 'bg-green-100 text-correct' : 'bg-red-100 text-incorrect'
             }`}
           >
             <p className="font-bold mb-2">
               {isCorrect ? '정답입니다!' : '오답입니다!'}
             </p>
-            <div className="bg-yellow-50 p-3 rounded text-gray-800">
+            <div className="bg-explanation p-3 rounded text-gray-800 mb-4">
               💡 해설: {current.explanation}
             </div>
+            <button
+              onClick={handleNextQuestion}
+              className="px-5 py-2 bg-blue-500 text-white rounded-lg shadow hover:bg-blue-600"
+            >
+              다음 문제 →
+            </button>
           </div>
         )}
       </div>
