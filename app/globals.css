@@ -2,7 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 전역 스타일 커스터마이징 */
 @layer base {
   body {
     @apply min-h-screen bg-background text-gray-800 font-sans;
