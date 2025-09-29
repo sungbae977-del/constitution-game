@@ -1,21 +1,19 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
-    './app/**/*.{js,ts,jsx,tsx}',
-    './pages/**/*.{js,ts,jsx,tsx}',
-    './components/**/*.{js,ts,jsx,tsx}',
-    './src/**/*.{js,ts,jsx,tsx}',
+    "./app/**/*.{js,ts,jsx,tsx}",
+    "./components/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {
       colors: {
-        background: '#e6fff5', // 연한 민트 배경색
-        card: '#ffffff',       // 카드용 흰색 배경
-        correct: '#16a34a',    // 정답 - 초록
-        incorrect: '#dc2626',  // 오답 - 빨강
-        explanation: '#fef9c3' // 해설 - 연노랑
-      }
-    }
+        background: "#e6fffa",   // 민트톤 배경
+        card: "#ffffff",        // 카드 배경 (흰색)
+        explanation: "#fef9c3", // 연노랑 (해설 박스)
+        correct: "#16a34a",     // 초록 (정답)
+        incorrect: "#dc2626",   // 빨강 (오답)
+      },
+    },
   },
   plugins: [],
-}
+};
