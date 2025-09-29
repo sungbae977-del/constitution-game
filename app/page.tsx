@@ -83,6 +83,7 @@ export default function Home() {
     );
   }
 
+  // 초기 화면 (엑셀 업로드)
   if (questions.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background text-gray-800 px-4">
@@ -106,6 +107,7 @@ export default function Home() {
     );
   }
 
+  // 모든 문제 풀이 완료
   if (currentQuestionIndex >= questions.length) {
     const correctCount = questions.length - wrongAnswers.length;
     const rate = ((correctCount / questions.length) * 100).toFixed(1);
@@ -128,16 +130,30 @@ export default function Home() {
     );
   }
 
+  // 문제 풀이 중
   const current = questions[currentQuestionIndex];
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background text-gray-800 px-4">
-      <div className="bg-card p-6 rounded-2xl shadow-lg w-full max-w-2xl text-center">
-        <h1 className="text-2xl font-bold mb-6">
-          Q{currentQuestionIndex + 1}. {current.question}
-        </h1>
+      <div className="bg-card p-6 rounded-2xl shadow-lg w-full max-w-2xl text-center relative">
+        {/* 상단 제목 + 틀린 문제 버튼 */}
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">헌법게임 🎮</h1>
+          <button
+            onClick={() => setShowWrongList(true)}
+            className="text-sm text-blue-600 underline"
+          >
+            틀린 문제 목록
+          </button>
+        </div>
 
-        <div className="flex justify-center gap-6">
+        {/* 문제 */}
+        <h2 className="text-lg font-semibold mb-6">
+          Q{currentQuestionIndex + 1}. {current.question}
+        </h2>
+
+        {/* OX 버튼 */}
+        <div className="flex justify-center gap-6 mb-6">
           <button
             onClick={() => handleAnswer('O')}
             className="bg-white border px-6 py-3 rounded-lg shadow hover:bg-gray-100 text-xl"
@@ -152,6 +168,7 @@ export default function Home() {
           </button>
         </div>
 
+        {/* 정답/오답 결과 */}
         {showResult && (
           <div
             className={`mt-6 p-4 rounded-lg shadow ${
