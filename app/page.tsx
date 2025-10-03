@@ -11,6 +11,16 @@ interface Question {
   explanation: string;
 }
 
+// Fisher–Yates Shuffle
+function shuffleArray<T>(array: T[]): T[] {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 export default function Home() {
   const [availableSets, setAvailableSets] = useState<string[]>([]);
   const [selectedSet, setSelectedSet] = useState<string | null>(null);
@@ -20,7 +30,7 @@ export default function Home() {
   const [showResult, setShowResult] = useState(false);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
 
-  // 전체 오답 관련 state
+  // 오답 관련
   const [showWrongList, setShowWrongList] = useState(false);
   const [selectedWrongSet, setSelectedWrongSet] = useState<string | null>(null);
 
@@ -34,7 +44,7 @@ export default function Home() {
     setAvailableSets(setNames);
   }, []);
 
-  // 📌 파일 업로드 → 문제 저장
+  // 📌 파일 업로드 → 문제 그대로 저장
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -72,13 +82,14 @@ export default function Home() {
     reader.readAsArrayBuffer(file);
   };
 
-  // 📌 시작하기 버튼
+  // 📌 시작하기 → 문제 불러와 무작위 섞기
   const handleStartQuiz = () => {
     if (!selectedSet) return;
     const saved = localStorage.getItem(`questions_${selectedSet}`);
     if (saved) {
-      const q = JSON.parse(saved);
-      setQuestions(q);
+      const q: Question[] = JSON.parse(saved) as Question[];
+      const shuffled: Question[] = shuffleArray<Question>(q);
+      setQuestions(shuffled);
       setCurrentIndex(0);
       setIsQuizStarted(true);
     }
@@ -110,7 +121,7 @@ export default function Home() {
     }
   };
 
-  // 📌 틀린 문제 초기화
+  // 📌 오답 초기화
   const handleResetWrongAnswers = () => {
     const wrongKeys = Object.keys(localStorage).filter((k) =>
       k.startsWith("wrong_")
@@ -133,7 +144,7 @@ export default function Home() {
       })
       .sort((a, b) => a.name.localeCompare(b.name, "ko", { numeric: true }));
 
-    // 1단계: 파트 선택 화면
+    // 1단계: 파트 선택
     if (!selectedWrongSet) {
       return (
         <div className="min-h-screen bg-background flex flex-col items-center p-6">
@@ -174,17 +185,17 @@ export default function Home() {
         </div>
       );
     } else {
-      // 2단계: 특정 파트 상세 화면
+      // 2단계: 특정 파트 상세
       const part = wrongSets.find((s) => s.name === selectedWrongSet);
       return (
         <div className="min-h-screen bg-background flex flex-col items-center p-6">
-          <h1 className="text-2xl font-bold mb-4">
+          <h1 className="text-2xl font-bold">
             {selectedWrongSet} - 틀린 문제
           </h1>
           {part?.questions.length === 0 ? (
             <p>이 파트에서 틀린 문제가 없습니다.</p>
           ) : (
-            <ul className="space-y-4 max-w-xl w-full">
+            <ul className="space-y-4 max-w-xl w-full mt-4">
               {part?.questions.map((q, i) => (
                 <li key={i} className="bg-card p-4 rounded-xl shadow">
                   <p className="font-semibold mb-2">
@@ -224,7 +235,7 @@ export default function Home() {
     const current = questions[currentIndex];
     return (
       <div className="min-h-screen bg-background flex flex-col items-center p-6">
-        {/* 상단 영역 */}
+        {/* 상단 */}
         <div className="flex justify-between w-full max-w-xl mb-4">
           <h1 className="text-2xl font-bold">헌법 게임</h1>
           <button
@@ -297,7 +308,7 @@ export default function Home() {
         />
       </div>
 
-      {/* 저장된 파트 목록 */}
+      {/* 저장된 파트 */}
       <div className="flex flex-col items-center space-y-3">
         <h2 className="text-xl font-bold">저장된 파트</h2>
         {availableSets.length === 0 ? (
