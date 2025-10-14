@@ -2,8 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  body {
-    @apply min-h-screen bg-background text-gray-800 font-sans;
-  }
+/* 기본 톤 (민트 배경 + 가독성 높은 글자색) */
+html, body {
+  @apply min-h-screen bg-teal-50 text-slate-800;
 }
+
+/* 재사용 카드 유틸리티 */
+.card {
+  @apply bg-white rounded-2xl shadow-card p-6 sm:p-8;
+}
+
+/* 버튼 유틸리티(초록/빨강 OX) */
+.btn {
+  @apply inline-flex items-center justify-center rounded-lg px-4 py-2 font-medium;
+}
+.btn-green { @apply bg-green-600 text-white hover:bg-green-700; }
+.btn-red   { @apply bg-red-600 text-white hover:bg-red-700; }
+.btn-mute  { @apply bg-slate-200 text-slate-800 hover:bg-slate-300; }
