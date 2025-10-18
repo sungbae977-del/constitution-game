@@ -17,6 +17,8 @@ type PartsIndex = Record<string, { title: string; createdAt: number }>;
 type WrongMap = Record<string, number>;
 type Mode = 'HOME' | 'PART' | 'EXAM' | 'WRONG';
 
+const EXAM_BATCH_SIZE = 100;
+
 /** 로컬스토리지 키 */
 const LS = {
   PARTS: 'parts_index',
@@ -24,11 +26,15 @@ const LS = {
   PART_ORDER: (pk: string) => `order_${pk}`,
   PART_CURSOR: (pk: string) => `cursor_${pk}`,
   PART_WRONG: (pk: string) => `wrong_${pk}`,
+
   EXAM_Q: 'exam_questions',
   EXAM_ORDER: 'exam_order',
   EXAM_CURSOR: 'exam_cursor',
   EXAM_WRONG: 'exam_wrong',
   EXAM_CORRECT: 'exam_correct_ids',
+
+  // ▼ 추가: 세션 전체 스냅샷(새로고침 복원용)
+  SESSION: 'session_state', // { mode, activePart, cursor, order, showResult, isCorrect, answered, correctCnt, onlyWrong }
 } as const;
 
 /** JSON 저장/로드 */
@@ -42,10 +48,10 @@ const loadJSON = <T,>(k: string, fallback: T): T => {
   }
 };
 
-/** 자연 정렬(숫자 인식) */
+/** 자연 정렬 */
 const collator = new Intl.Collator('ko', { numeric: true, sensitivity: 'base' });
 
-/** 피셔–예이츠 */
+/** 셔플 */
 const shuffle = <T,>(arr: T[]) => {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -55,14 +61,13 @@ const shuffle = <T,>(arr: T[]) => {
   return a;
 };
 
-/** 배열에서 n개 무작위 추출(인덱스 기반) */
+/** 인덱스 무작위 선택 */
 const pickRandomIndices = (length: number, n: number) => {
-  if (n >= length) return shuffle(Array.from({ length }, (_, i) => i));
-  const idx = shuffle(Array.from({ length }, (_, i) => i));
-  return idx.slice(0, n);
+  const all = Array.from({ length }, (_, i) => i);
+  return n >= length ? shuffle(all) : shuffle(all).slice(0, n);
 };
 
-/** 엑셀 -> Question[] 파싱 */
+/** 엑셀 → Question[] */
 function toQuestions(fileName: string, ws: XLSX.WorkSheet): Question[] {
   const rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
   return rows
@@ -77,53 +82,103 @@ function toQuestions(fileName: string, ws: XLSX.WorkSheet): Question[] {
     .filter(Boolean) as Question[];
 }
 
-/** 파일명으로 파트 키 생성 */
+/** 파트 키(파일명 기반) */
 const toPartKey = (fileName: string) =>
   fileName.replace(/\.[^.]+$/, '').replace(/\s+/g, '_');
 
 /** ---------------- 메인 컴포넌트 ---------------- */
 
 export default function Home() {
-  /** 전역 모드/UI */
+  // 모드/파트
   const [mode, setMode] = useState<Mode>('HOME');
+  const [activePart, setActivePart] = useState<string | null>(null);
 
-  /** 파트 인덱스 */
+  // 마스터 데이터
   const [parts, setParts] = useState<PartsIndex>({});
   const sortedPartKeys = useMemo(
     () => Object.keys(parts).sort((a, b) => collator.compare(parts[a].title, parts[b].title)),
     [parts]
   );
 
-  /** 현재 활성 파트/세션 공용 상태 */
-  const [activePart, setActivePart] = useState<string | null>(null);
+  // 세션 공통 상태
   const [questions, setQuestions] = useState<Question[]>([]);
   const [order, setOrder] = useState<number[]>([]);
   const [cursor, setCursor] = useState<number>(0);
   const [wrongMap, setWrongMap] = useState<WrongMap>({});
   const [correctSet, setCorrectSet] = useState<Set<string>>(new Set()); // EXAM 전용
+
   const [showResult, setShowResult] = useState(false);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
 
-  /** 진행률/정답률 */
+  // 진행률/정답률
   const [answered, setAnswered] = useState(0);
   const [correctCnt, setCorrectCnt] = useState(0);
 
-  /** ‘틀린 문제만’ 토글 */
+  // 토글: 틀린 문제만
   const [onlyWrong, setOnlyWrong] = useState(false);
 
-  /** 현재 문제 */
+  // 현재 문제
   const current = useMemo(
     () => (order.length ? questions[order[cursor]] : null),
     [questions, order, cursor]
   );
 
-  /** 초기화 */
+  /** 초기 복원 */
   useEffect(() => {
     const idx = loadJSON<PartsIndex>(LS.PARTS, {});
     setParts(idx);
+
+    // 세션 복원
+    const s = loadJSON<any | null>(LS.SESSION, null);
+    if (s && s.mode) {
+      setMode(s.mode as Mode);
+      setActivePart(s.activePart ?? null);
+      setOrder(s.order ?? []);
+      setCursor(Math.max(0, Math.min(s.cursor ?? 0, (s.order ?? []).length - 1)));
+      setShowResult(!!s.showResult);
+      setIsCorrect(s.isCorrect ?? null);
+      setAnswered(s.answered ?? 0);
+      setCorrectCnt(s.correctCnt ?? 0);
+      setOnlyWrong(!!s.onlyWrong);
+
+      if (s.mode === 'PART' && s.activePart) {
+        const qs = loadJSON<Question[]>(LS.PART_Q(s.activePart), []);
+        setQuestions(qs);
+        setWrongMap(loadJSON<WrongMap>(LS.PART_WRONG(s.activePart), {}));
+      } else if (s.mode === 'EXAM') {
+        const qs = loadJSON<Question[]>(LS.EXAM_Q, []);
+        setQuestions(qs);
+        setWrongMap(loadJSON<WrongMap>(LS.EXAM_WRONG, {}));
+        setCorrectSet(new Set(loadJSON<string[]>(LS.EXAM_CORRECT, [])));
+      } else {
+        // HOME/WRONG 모드
+        setQuestions([]);
+      }
+    }
   }, []);
 
-  /** ---------- 파일 업로드 ---------- */
+  /** 세션 자동 저장 */
+  useEffect(() => {
+    // 진행 중인 두 모드만 저장 의미가 있음
+    if (mode === 'PART' || mode === 'EXAM') {
+      saveJSON(LS.SESSION, {
+        mode,
+        activePart,
+        order,
+        cursor,
+        showResult,
+        isCorrect,
+        answered,
+        correctCnt,
+        onlyWrong,
+      });
+    } else {
+      // HOME/WRONG이면 최소 모드/토글만 저장
+      saveJSON(LS.SESSION, { mode, onlyWrong });
+    }
+  }, [mode, activePart, order, cursor, showResult, isCorrect, answered, correctCnt, onlyWrong]);
+
+  /** ---------- 업로드 ---------- */
 
   const handleUploadPart = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -134,10 +189,8 @@ export default function Home() {
     if (!qs.length) { alert('엑셀에서 문제를 찾지 못했습니다.'); return; }
 
     const partKey = toPartKey(file.name);
-
     saveJSON(LS.PART_Q(partKey), qs);
-    saveJSON(LS.PART_ORDER(partKey), []);
-    saveJSON(LS.PART_CURSOR(partKey), 0);
+    // 기존 순서/커서 유지(새 세션은 사용자가 재시작할 때 생성)
     const wrong = loadJSON<WrongMap>(LS.PART_WRONG(partKey), {});
     saveJSON(LS.PART_WRONG(partKey), wrong);
 
@@ -162,7 +215,7 @@ export default function Home() {
     e.target.value = '';
   };
 
-  /** ---------- 세션 시작/재시작 유틸 ---------- */
+  /** ---------- 파트 세션 ---------- */
 
   const buildOrderForPart = (qs: Question[], wm: WrongMap) => {
     if (onlyWrong) {
@@ -171,9 +224,8 @@ export default function Home() {
         .filter(x => x.c > 0)
         .sort((a, b) => b.c - a.c)
         .map(x => x.i);
-      return wrongIdx.length ? wrongIdx : Array.from({ length: 0 }, () => 0); // 비어있으면 빈 세션
+      return wrongIdx;
     }
-    // 오답 우선 → 나머지 랜덤
     const wrongIdsDesc = Object.entries(wm)
       .sort((a, b) => b[1] - a[1])
       .map(([id]) => qs.findIndex((q) => q.id === id))
@@ -183,21 +235,27 @@ export default function Home() {
     return [...wrongIdsDesc, ...shuffle(remain)];
   };
 
-  const startPart = (partKey: string) => {
+  const startPart = (partKey: string, forceReshuffle = false) => {
     const qs = loadJSON<Question[]>(LS.PART_Q(partKey), []);
     if (!qs.length) { alert('먼저 해당 파트 파일을 업로드해주세요.'); return; }
 
     const wm = loadJSON<WrongMap>(LS.PART_WRONG(partKey), {});
-    let curOrder = buildOrderForPart(qs, wm);
+    const savedOrder = loadJSON<number[]>(LS.PART_ORDER(partKey), []);
+    const savedCursor = loadJSON<number>(LS.PART_CURSOR(partKey), 0);
 
-    if (onlyWrong && curOrder.length === 0) {
-      alert('해당 파트에 기록된 오답이 없습니다.');
-      return;
+    let curOrder = savedOrder;
+    let curCursor = savedCursor;
+
+    if (forceReshuffle || curOrder.length === 0) {
+      curOrder = buildOrderForPart(qs, wm);
+      curCursor = 0;
+      saveJSON(LS.PART_ORDER(partKey), curOrder);
+      saveJSON(LS.PART_CURSOR(partKey), curCursor);
     }
 
     setQuestions(qs);
     setOrder(curOrder);
-    setCursor(0);
+    setCursor(curCursor);
     setWrongMap(wm);
     setCorrectSet(new Set());
     setShowResult(false);
@@ -205,82 +263,106 @@ export default function Home() {
     setActivePart(partKey);
     setMode('PART');
 
-    // 진행률 초기화
-    setAnswered(0);
-    setCorrectCnt(0);
+    // 진행률 초기화(새 라운드 시작 시). 계속 이어하기면 유지.
+    if (forceReshuffle || savedOrder.length === 0) {
+      setAnswered(0);
+      setCorrectCnt(0);
+    }
   };
 
   const restartCurrentPart = () => {
     if (!activePart) return;
-    startPart(activePart);
+    startPart(activePart, true); // 다시 섞어서 재시작
   };
 
-  const enterExam = () => {
+  /** ---------- 종합평가 라운드 ---------- */
+
+  const buildNextExamOrder = (qs: Question[], wm: WrongMap, correctIds: Set<string>) => {
+    // 1) 오답 누적 먼저 채택(많이 틀린 순)
+    const wrongCandidates = qs
+      .map((q, i) => ({ i, id: q.id, c: wm[q.id] ?? 0 }))
+      .filter(x => x.c > 0)
+      .sort((a, b) => b.c - a.c)
+      .map(x => x.i);
+
+    // 2) 아직 마스터되지 않은 문제(= correctIds에 없는)들 중에서 랜덤 채움
+    const unmastered = qs
+      .map((q, i) => ({ i, id: q.id }))
+      .filter(x => !correctIds.has(x.id))
+      .map(x => x.i);
+
+    const taken = new Set<number>();
+    const result: number[] = [];
+
+    for (const i of wrongCandidates) {
+      if (result.length >= EXAM_BATCH_SIZE) break;
+      if (!taken.has(i)) { result.push(i); taken.add(i); }
+    }
+
+    if (result.length < EXAM_BATCH_SIZE) {
+      const remain = shuffle(unmastered).filter(i => !taken.has(i));
+      result.push(...remain.slice(0, EXAM_BATCH_SIZE - result.length));
+    }
+
+    return result;
+  };
+
+  const enterExam = (forceNewRound = false) => {
     const qs = loadJSON<Question[]>(LS.EXAM_Q, []);
     if (!qs.length) { alert('먼저 종합평가 전용 파일을 업로드해주세요.'); return; }
 
-    const curWrong = loadJSON<WrongMap>(LS.EXAM_WRONG, {});
+    const wm = loadJSON<WrongMap>(LS.EXAM_WRONG, {});
     const correctIds = new Set(loadJSON<string[]>(LS.EXAM_CORRECT, []));
+    let curOrder = loadJSON<number[]>(LS.EXAM_ORDER, []);
+    let curCursor = loadJSON<number>(LS.EXAM_CURSOR, 0);
 
-    let indices: number[] = [];
-    if (onlyWrong) {
-      indices = qs
-        .map((q, i) => ({ i, c: curWrong[q.id] ?? 0 }))
-        .filter(x => x.c > 0)
-        .sort((a, b) => b.c - a.c)
-        .map(x => x.i);
-      if (!indices.length) { alert('종합평가 오답 기록이 없습니다.'); return; }
-    } else {
-      const savedOrder = loadJSON<number[]>(LS.EXAM_ORDER, []);
-      indices = savedOrder;
-      if (indices.length === 0) {
-        const candidates = qs.map((q, i) => ({ q, i })).filter(({ q }) => !correctIds.has(q.id));
-        indices = candidates.length
-          ? shuffle(candidates.map((c) => c.i)).slice(0, 100)
-          : pickRandomIndices(qs.length, 100);
-        saveJSON(LS.EXAM_ORDER, indices);
-        saveJSON(LS.EXAM_CURSOR, 0);
-      }
+    // 라운드 생성 조건: 강제 새 라운드 또는 저장된 라운드 없음
+    if (forceNewRound || curOrder.length === 0) {
+      curOrder = buildNextExamOrder(qs, wm, correctIds);
+      curCursor = 0;
+      saveJSON(LS.EXAM_ORDER, curOrder);
+      saveJSON(LS.EXAM_CURSOR, curCursor);
     }
 
     setQuestions(qs);
-    setOrder(indices);
-    setCursor(0);
-    setWrongMap(curWrong);
+    setOrder(curOrder);
+    setCursor(curCursor);
+    setWrongMap(wm);
     setCorrectSet(correctIds);
     setShowResult(false);
     setIsCorrect(null);
     setMode('EXAM');
     setActivePart(null);
 
-    setAnswered(0);
-    setCorrectCnt(0);
+    if (forceNewRound || loadJSON<number[]>(LS.EXAM_ORDER, []).length === 0) {
+      setAnswered(0);
+      setCorrectCnt(0);
+    }
   };
 
-  /** 진행 자동 저장 */
+  /** 진행/상태 저장 */
   useEffect(() => {
     if (mode === 'PART' && activePart) {
       saveJSON(LS.PART_ORDER(activePart), order);
       saveJSON(LS.PART_CURSOR(activePart), cursor);
       saveJSON(LS.PART_WRONG(activePart), wrongMap);
-    }
-    if (mode === 'EXAM') {
+    } else if (mode === 'EXAM') {
       saveJSON(LS.EXAM_ORDER, order);
       saveJSON(LS.EXAM_CURSOR, cursor);
       saveJSON(LS.EXAM_WRONG, wrongMap);
+      saveJSON(LS.EXAM_CORRECT, Array.from(correctSet));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, order, cursor, wrongMap, activePart]);
+  }, [mode, activePart, order, cursor, wrongMap, correctSet]);
 
   /** ---------- 정답 처리 ---------- */
 
   const handleAnswer = (user: OX) => {
-    if (!current || showResult) return; // 한 문제 1회만 처리
+    if (!current || showResult) return; // 중복 클릭 방지
     const correct = user === current.answer;
     setIsCorrect(correct);
     setShowResult(true);
 
-    // 진행/정답률
     setAnswered((a) => a + 1);
     if (correct) setCorrectCnt((c) => c + 1);
 
@@ -296,7 +378,6 @@ export default function Home() {
         const nextCorrect = new Set(correctSet);
         nextCorrect.add(current.id);
         setCorrectSet(nextCorrect);
-        saveJSON(LS.EXAM_CORRECT, Array.from(nextCorrect));
       }
       setWrongMap(w);
     }
@@ -308,7 +389,14 @@ export default function Home() {
     if (cursor < order.length - 1) {
       setCursor((c) => c + 1);
     } else {
-      alert('세션 완료!');
+      if (mode === 'EXAM') {
+        // 라운드 종료: 다음 라운드로 넘어가도록 저장된 오더 제거 + 알림
+        saveJSON(LS.EXAM_ORDER, []); // 다음 실행 시 새 라운드 구성
+        saveJSON(LS.EXAM_CURSOR, 0);
+        alert('종합평가 라운드 완료! 다시 “종합평가 시작 (100문제)”을 누르면 다음 라운드가 생성됩니다.');
+      } else {
+        alert('세션 완료!');
+      }
     }
   };
 
@@ -359,7 +447,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-teal-50 text-slate-800">
-      {/* 상단 컨테이너 */}
+      {/* 상단 */}
       <header className="w-full max-w-5xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
@@ -367,7 +455,6 @@ export default function Home() {
           </h1>
 
           <div className="flex items-center gap-3">
-            {/* 틀린 문제만 토글 */}
             <label className="inline-flex items-center gap-2 text-sm select-none">
               <input
                 type="checkbox"
@@ -383,7 +470,7 @@ export default function Home() {
                 className="hidden sm:inline-flex items-center rounded-lg bg-emerald-600 px-3 py-1.5 text-white text-sm font-semibold shadow hover:bg-emerald-700"
                 onClick={restartCurrentPart}
                 disabled={mode !== 'PART' || !activePart}
-                title="현재 파트를 토글 조건으로 재시작"
+                title="현재 파트를 다시 섞어 재시작"
               >
                 현재 파트 재시작
               </button>
@@ -422,14 +509,22 @@ export default function Home() {
 
           <button
             className="rounded-md border px-3 py-1.5 text-sm bg-white shadow hover:bg-gray-50"
-            onClick={enterExam}
+            onClick={() => enterExam(false)} // 저장된 라운드가 있으면 이어하기, 없으면 생성
           >
             종합평가 시작 (100문제)
+          </button>
+
+          <button
+            className="rounded-md border px-3 py-1.5 text-sm bg-white shadow hover:bg-gray-50"
+            onClick={() => enterExam(true)} // 강제 새 라운드(다시 섞기)
+            title="현재 성과를 반영해 다음 라운드를 새로 구성"
+          >
+            종합평가 다음 라운드 생성
           </button>
         </div>
       </header>
 
-      {/* 중앙 카드 래퍼 */}
+      {/* 본문 */}
       <main className="w-full">
         <div className="max-w-4xl mx-auto px-4 pb-10">
           <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8">
@@ -437,13 +532,14 @@ export default function Home() {
               <HomeView
                 parts={parts}
                 sortedPartKeys={sortedPartKeys}
-                onStartPart={startPart}
+                onStartPart={(k) => startPart(k, false)} // 이어하기 우선
+                onReshufflePart={(k) => startPart(k, true)} // 강제 재셔플
               />
             )}
 
             {(mode === 'PART' || mode === 'EXAM') && current && (
               <>
-                {/* 진행률/정답률 헤더 */}
+                {/* 진행률/정답률 */}
                 <div className="mb-5">
                   <div className="flex items-center justify-between text-sm text-slate-600 mb-1">
                     <span>진행률 {progress}%</span>
@@ -491,10 +587,12 @@ function HomeView({
   parts,
   sortedPartKeys,
   onStartPart,
+  onReshufflePart,
 }: {
   parts: PartsIndex;
   sortedPartKeys: string[];
   onStartPart: (k: string) => void;
+  onReshufflePart: (k: string) => void;
 }) {
   return (
     <section>
@@ -504,14 +602,25 @@ function HomeView({
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {sortedPartKeys.map((pk) => (
-            <button
-              key={pk}
-              className="text-left p-4 rounded-xl border bg-white shadow hover:bg-gray-50"
-              onClick={() => onStartPart(pk)}
-            >
+            <div key={pk} className="p-4 rounded-xl border bg-white shadow">
               <div className="font-medium">{parts[pk].title}</div>
-              <div className="text-xs text-gray-500 mt-1">클릭하여 시작</div>
-            </button>
+              <div className="mt-2 flex gap-2">
+                <button
+                  className="rounded-md border px-3 py-1.5 text-sm bg-white shadow hover:bg-gray-50"
+                  onClick={() => onStartPart(pk)}
+                  title="이어하기 (저장된 순서/커서 유지)"
+                >
+                  이어하기
+                </button>
+                <button
+                  className="rounded-md border px-3 py-1.5 text-sm bg-white shadow hover:bg-gray-50"
+                  onClick={() => onReshufflePart(pk)}
+                  title="다시 섞기(오답 우선)"
+                >
+                  다시 섞기
+                </button>
+              </div>
+            </div>
           ))}
         </div>
       )}
