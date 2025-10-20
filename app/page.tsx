@@ -33,7 +33,7 @@ const LS = {
   EXAM_WRONG: 'exam_wrong',
   EXAM_CORRECT: 'exam_correct_ids',
 
-  // ▼ 추가: 세션 전체 스냅샷(새로고침 복원용)
+  // 세션 스냅샷(새로고침 복원용)
   SESSION: 'session_state', // { mode, activePart, cursor, order, showResult, isCorrect, answered, correctCnt, onlyWrong }
 } as const;
 
@@ -151,7 +151,6 @@ export default function Home() {
         setWrongMap(loadJSON<WrongMap>(LS.EXAM_WRONG, {}));
         setCorrectSet(new Set(loadJSON<string[]>(LS.EXAM_CORRECT, [])));
       } else {
-        // HOME/WRONG 모드
         setQuestions([]);
       }
     }
@@ -159,7 +158,6 @@ export default function Home() {
 
   /** 세션 자동 저장 */
   useEffect(() => {
-    // 진행 중인 두 모드만 저장 의미가 있음
     if (mode === 'PART' || mode === 'EXAM') {
       saveJSON(LS.SESSION, {
         mode,
@@ -173,7 +171,6 @@ export default function Home() {
         onlyWrong,
       });
     } else {
-      // HOME/WRONG이면 최소 모드/토글만 저장
       saveJSON(LS.SESSION, { mode, onlyWrong });
     }
   }, [mode, activePart, order, cursor, showResult, isCorrect, answered, correctCnt, onlyWrong]);
@@ -190,7 +187,6 @@ export default function Home() {
 
     const partKey = toPartKey(file.name);
     saveJSON(LS.PART_Q(partKey), qs);
-    // 기존 순서/커서 유지(새 세션은 사용자가 재시작할 때 생성)
     const wrong = loadJSON<WrongMap>(LS.PART_WRONG(partKey), {});
     saveJSON(LS.PART_WRONG(partKey), wrong);
 
@@ -263,7 +259,6 @@ export default function Home() {
     setActivePart(partKey);
     setMode('PART');
 
-    // 진행률 초기화(새 라운드 시작 시). 계속 이어하기면 유지.
     if (forceReshuffle || savedOrder.length === 0) {
       setAnswered(0);
       setCorrectCnt(0);
@@ -285,7 +280,7 @@ export default function Home() {
       .sort((a, b) => b.c - a.c)
       .map(x => x.i);
 
-    // 2) 아직 마스터되지 않은 문제(= correctIds에 없는)들 중에서 랜덤 채움
+    // 2) 아직 마스터되지 않은 문제(= correctIds에 없는)들 중 랜덤
     const unmastered = qs
       .map((q, i) => ({ i, id: q.id }))
       .filter(x => !correctIds.has(x.id))
@@ -316,7 +311,6 @@ export default function Home() {
     let curOrder = loadJSON<number[]>(LS.EXAM_ORDER, []);
     let curCursor = loadJSON<number>(LS.EXAM_CURSOR, 0);
 
-    // 라운드 생성 조건: 강제 새 라운드 또는 저장된 라운드 없음
     if (forceNewRound || curOrder.length === 0) {
       curOrder = buildNextExamOrder(qs, wm, correctIds);
       curCursor = 0;
@@ -373,11 +367,17 @@ export default function Home() {
     } else if (mode === 'EXAM') {
       const w = { ...wrongMap };
       if (!correct) {
+        // 틀리면 누적
         w[current.id] = (w[current.id] ?? 0) + 1;
       } else {
+        // 맞추는 순간: 마스터 처리 + 오답 목록에서 제거(다음 라운드부터 제외)
         const nextCorrect = new Set(correctSet);
         nextCorrect.add(current.id);
         setCorrectSet(nextCorrect);
+
+        if (w[current.id]) {
+          delete w[current.id];
+        }
       }
       setWrongMap(w);
     }
@@ -390,10 +390,10 @@ export default function Home() {
       setCursor((c) => c + 1);
     } else {
       if (mode === 'EXAM') {
-        // 라운드 종료: 다음 라운드로 넘어가도록 저장된 오더 제거 + 알림
+        // 라운드 종료: 다음 라운드 새로 구성되도록 기존 오더 삭제
         saveJSON(LS.EXAM_ORDER, []); // 다음 실행 시 새 라운드 구성
         saveJSON(LS.EXAM_CURSOR, 0);
-        alert('종합평가 라운드 완료! 다시 “종합평가 시작 (100문제)”을 누르면 다음 라운드가 생성됩니다.');
+        alert('종합평가 라운드 완료! 홈에서 다시 “종합평가 시작 (100문제)”을 누르면 다음 라운드가 생성됩니다.');
       } else {
         alert('세션 완료!');
       }
@@ -454,7 +454,19 @@ export default function Home() {
             헌법 게임 <span className="ml-1">🎮</span>
           </h1>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* 홈으로 */}
+            {mode !== 'HOME' && (
+              <button
+                className="inline-flex items-center rounded-lg bg-sky-500 px-3 py-1.5 text-white text-sm font-semibold shadow hover:bg-sky-600"
+                onClick={() => setMode('HOME')}
+                title="홈으로 이동 (진행 상태는 유지됩니다)"
+              >
+                홈으로
+              </button>
+            )}
+
+            {/* 틀린 문제만 토글 */}
             <label className="inline-flex items-center gap-2 text-sm select-none">
               <input
                 type="checkbox"
@@ -516,7 +528,7 @@ export default function Home() {
 
           <button
             className="rounded-md border px-3 py-1.5 text-sm bg-white shadow hover:bg-gray-50"
-            onClick={() => enterExam(true)} // 강제 새 라운드(다시 섞기)
+            onClick={() => enterExam(true)} // 강제 새 라운드(성과 반영)
             title="현재 성과를 반영해 다음 라운드를 새로 구성"
           >
             종합평가 다음 라운드 생성
@@ -532,8 +544,8 @@ export default function Home() {
               <HomeView
                 parts={parts}
                 sortedPartKeys={sortedPartKeys}
-                onStartPart={(k) => startPart(k, false)} // 이어하기 우선
-                onReshufflePart={(k) => startPart(k, true)} // 강제 재셔플
+                onStartPart={(k) => startPart(k, false)} // 이어하기
+                onReshufflePart={(k) => startPart(k, true)} // 다시 섞기
               />
             )}
 
