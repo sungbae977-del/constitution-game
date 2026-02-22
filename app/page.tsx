@@ -117,6 +117,10 @@ export default function Home() {
   // 토글: 틀린 문제만
   const [onlyWrong, setOnlyWrong] = useState(false);
 
+  // 편집 모달 상태
+  const [editOpen, setEditOpen] = useState(false);
+  const [editing, setEditing] = useState<Question | null>(null);
+
   // 현재 문제
   const current = useMemo(
     () => (order.length ? questions[order[cursor]] : null),
@@ -215,13 +219,13 @@ export default function Home() {
 
   const buildOrderForPart = (qs: Question[], wm: WrongMap) => {
     if (onlyWrong) {
-      const wrongIdx = qs
+      return qs
         .map((q, i) => ({ i, c: wm[q.id] ?? 0 }))
         .filter(x => x.c > 0)
         .sort((a, b) => b.c - a.c)
         .map(x => x.i);
-      return wrongIdx;
     }
+
     const wrongIdsDesc = Object.entries(wm)
       .sort((a, b) => b[1] - a[1])
       .map(([id]) => qs.findIndex((q) => q.id === id))
@@ -267,20 +271,20 @@ export default function Home() {
 
   const restartCurrentPart = () => {
     if (!activePart) return;
-    startPart(activePart, true); // 다시 섞어서 재시작
+    startPart(activePart, true);
   };
 
   /** ---------- 종합평가 라운드 ---------- */
 
   const buildNextExamOrder = (qs: Question[], wm: WrongMap, correctIds: Set<string>) => {
-    // 1) 오답 누적 먼저 채택(많이 틀린 순)
+    // 1) 오답 누적(많이 틀린 순)
     const wrongCandidates = qs
       .map((q, i) => ({ i, id: q.id, c: wm[q.id] ?? 0 }))
       .filter(x => x.c > 0)
       .sort((a, b) => b.c - a.c)
       .map(x => x.i);
 
-    // 2) 아직 마스터되지 않은 문제(= correctIds에 없는)들 중 랜덤
+    // 2) 아직 마스터되지 않은 문제(= correctIds에 없는) 랜덤
     const unmastered = qs
       .map((q, i) => ({ i, id: q.id }))
       .filter(x => !correctIds.has(x.id))
@@ -349,10 +353,43 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, activePart, order, cursor, wrongMap, correctSet]);
 
+  /** ---------- 편집 저장 (핵심) ---------- */
+
+  const openEditFor = (q: Question) => {
+    setEditing(q);
+    setEditOpen(true);
+  };
+
+  const persistEditedQuestion = (edited: Question) => {
+    // 1) 현재 state questions 갱신
+    setQuestions(prev => prev.map(q => (q.id === edited.id ? edited : q)));
+
+    // 2) localStorage의 문제풀 갱신 (모드별로 다름)
+    if (mode === 'PART' && activePart) {
+      const key = LS.PART_Q(activePart);
+      const qs = loadJSON<Question[]>(key, []);
+      const next = qs.map(q => (q.id === edited.id ? edited : q));
+      saveJSON(key, next);
+    } else if (mode === 'EXAM') {
+      const key = LS.EXAM_Q;
+      const qs = loadJSON<Question[]>(key, []);
+      const next = qs.map(q => (q.id === edited.id ? edited : q));
+      saveJSON(key, next);
+    }
+
+    // 참고: 오답/정답 기록은 보통 그대로 둡니다(원하면 재계산 옵션 추가 가능)
+  };
+
+  const handleSaveEdit = (edited: Question) => {
+    persistEditedQuestion(edited);
+    setEditOpen(false);
+    setEditing(null);
+  };
+
   /** ---------- 정답 처리 ---------- */
 
   const handleAnswer = (user: OX) => {
-    if (!current || showResult) return; // 중복 클릭 방지
+    if (!current || showResult) return;
     const correct = user === current.answer;
     setIsCorrect(correct);
     setShowResult(true);
@@ -367,17 +404,14 @@ export default function Home() {
     } else if (mode === 'EXAM') {
       const w = { ...wrongMap };
       if (!correct) {
-        // 틀리면 누적
         w[current.id] = (w[current.id] ?? 0) + 1;
       } else {
-        // 맞추는 순간: 마스터 처리 + 오답 목록에서 제거(다음 라운드부터 제외)
         const nextCorrect = new Set(correctSet);
         nextCorrect.add(current.id);
         setCorrectSet(nextCorrect);
 
-        if (w[current.id]) {
-          delete w[current.id];
-        }
+        // “틀렸던 문제는 맞추면 이후 라운드에서 제외”
+        if (w[current.id]) delete w[current.id];
       }
       setWrongMap(w);
     }
@@ -390,8 +424,7 @@ export default function Home() {
       setCursor((c) => c + 1);
     } else {
       if (mode === 'EXAM') {
-        // 라운드 종료: 다음 라운드 새로 구성되도록 기존 오더 삭제
-        saveJSON(LS.EXAM_ORDER, []); // 다음 실행 시 새 라운드 구성
+        saveJSON(LS.EXAM_ORDER, []);
         saveJSON(LS.EXAM_CURSOR, 0);
         alert('종합평가 라운드 완료! 홈에서 다시 “종합평가 시작 (100문제)”을 누르면 다음 라운드가 생성됩니다.');
       } else {
@@ -479,7 +512,7 @@ export default function Home() {
 
             {mode !== 'HOME' && (
               <button
-                className="hidden sm:inline-flex items-center rounded-lg bg-emerald-600 px-3 py-1.5 text-white text-sm font-semibold shadow hover:bg-emerald-700"
+                className="hidden sm:inline-flex items-center rounded-lg bg-emerald-600 px-3 py-1.5 text-white text-sm font-semibold shadow hover:bg-emerald-700 disabled:opacity-50"
                 onClick={restartCurrentPart}
                 disabled={mode !== 'PART' || !activePart}
                 title="현재 파트를 다시 섞어 재시작"
@@ -521,14 +554,14 @@ export default function Home() {
 
           <button
             className="rounded-md border px-3 py-1.5 text-sm bg-white shadow hover:bg-gray-50"
-            onClick={() => enterExam(false)} // 저장된 라운드가 있으면 이어하기, 없으면 생성
+            onClick={() => enterExam(false)}
           >
             종합평가 시작 (100문제)
           </button>
 
           <button
             className="rounded-md border px-3 py-1.5 text-sm bg-white shadow hover:bg-gray-50"
-            onClick={() => enterExam(true)} // 강제 새 라운드(성과 반영)
+            onClick={() => enterExam(true)}
             title="현재 성과를 반영해 다음 라운드를 새로 구성"
           >
             종합평가 다음 라운드 생성
@@ -544,8 +577,8 @@ export default function Home() {
               <HomeView
                 parts={parts}
                 sortedPartKeys={sortedPartKeys}
-                onStartPart={(k) => startPart(k, false)} // 이어하기
-                onReshufflePart={(k) => startPart(k, true)} // 다시 섞기
+                onStartPart={(k) => startPart(k, false)}
+                onReshufflePart={(k) => startPart(k, true)}
               />
             )}
 
@@ -574,6 +607,7 @@ export default function Home() {
                   isCorrect={isCorrect}
                   onAnswer={handleAnswer}
                   onNext={nextQuestion}
+                  onEdit={() => openEditFor(current)}
                 />
               </>
             )}
@@ -589,6 +623,14 @@ export default function Home() {
           </div>
         </div>
       </main>
+
+      {/* 편집 모달 */}
+      <EditModal
+        open={editOpen}
+        initial={editing}
+        onClose={() => { setEditOpen(false); setEditing(null); }}
+        onSave={handleSaveEdit}
+      />
     </div>
   );
 }
@@ -649,6 +691,7 @@ function QuestionView({
   isCorrect,
   onAnswer,
   onNext,
+  onEdit,
 }: {
   title: string;
   index: number;
@@ -658,9 +701,19 @@ function QuestionView({
   isCorrect: boolean | null;
   onAnswer: (ox: OX) => void;
   onNext: () => void;
+  onEdit: () => void;
 }) {
   return (
-    <section>
+    <section className="relative">
+      {/* 편집 버튼(문제별) */}
+      <button
+        className="absolute right-0 -top-1 inline-flex items-center gap-1 rounded-lg border bg-white px-2 py-1 text-xs shadow hover:bg-gray-50"
+        onClick={onEdit}
+        title="문제 편집"
+      >
+        ✏️ 편집
+      </button>
+
       <div className="text-center text-sm text-gray-500 mb-2">{title}</div>
       <h3 className="text-lg sm:text-xl font-bold text-center mb-5 leading-relaxed">
         문제 {index} / {total}
@@ -787,6 +840,128 @@ function WrongView({
         </ul>
       )}
     </section>
+  );
+}
+
+/** ---------------- 편집 모달 ---------------- */
+
+function EditModal({
+  open,
+  initial,
+  onClose,
+  onSave,
+}: {
+  open: boolean;
+  initial: Question | null;
+  onClose: () => void;
+  onSave: (edited: Question) => void;
+}) {
+  const [q, setQ] = useState('');
+  const [answer, setAnswer] = useState<OX>('O');
+  const [explanation, setExplanation] = useState('');
+
+  useEffect(() => {
+    if (!open || !initial) return;
+    setQ(initial.q ?? '');
+    setAnswer(initial.answer ?? 'O');
+    setExplanation(initial.explanation ?? '');
+  }, [open, initial]);
+
+  if (!open || !initial) return null;
+
+  const handleSubmit = () => {
+    const nq = q.trim();
+    if (!nq) {
+      alert('문제 내용은 비워둘 수 없습니다.');
+      return;
+    }
+    onSave({
+      ...initial,
+      q: nq,
+      answer,
+      explanation: explanation.trim(),
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      {/* backdrop */}
+      <div
+        className="absolute inset-0 bg-black/40"
+        onClick={onClose}
+      />
+
+      {/* modal */}
+      <div className="relative w-full max-w-2xl rounded-2xl bg-white shadow-xl border p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-bold">문제 편집</h3>
+            <p className="text-xs text-slate-500 mt-1">수정 내용은 저장되며, 새로고침 후에도 유지됩니다.</p>
+          </div>
+          <button
+            className="rounded-lg border bg-white px-2 py-1 text-sm shadow hover:bg-gray-50"
+            onClick={onClose}
+          >
+            닫기 ✕
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-4">
+          <div>
+            <label className="block text-sm font-semibold mb-1">문제</label>
+            <textarea
+              className="w-full rounded-lg border p-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-300"
+              rows={3}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+            <div className="sm:w-40">
+              <label className="block text-sm font-semibold mb-1">정답</label>
+              <select
+                className="w-full rounded-lg border p-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value as OX)}
+              >
+                <option value="O">O</option>
+                <option value="X">X</option>
+              </select>
+            </div>
+            <div className="flex-1 text-xs text-slate-500">
+              ※ 정답을 수정하면 이후 채점부터 반영됩니다.
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold mb-1">해설</label>
+            <textarea
+              className="w-full rounded-lg border p-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-300"
+              rows={4}
+              value={explanation}
+              onChange={(e) => setExplanation(e.target.value)}
+              placeholder="해설이 없다면 비워둘 수 있습니다."
+            />
+          </div>
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            className="rounded-lg border bg-white px-4 py-2 text-sm shadow hover:bg-gray-50"
+            onClick={onClose}
+          >
+            취소
+          </button>
+          <button
+            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700"
+            onClick={handleSubmit}
+          >
+            저장
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
